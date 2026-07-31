@@ -1,5 +1,6 @@
 *.log
 *.cache
 *.env
-*tmp*
 .venv/
+__pycache__/
+*.pyc

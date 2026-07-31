@@ -1,5 +1,2 @@
-logging
-os
-socket
 flask
 prometheus_client
