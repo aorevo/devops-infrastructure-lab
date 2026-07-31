@@ -1,0 +1,119 @@
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	app/
+	repository_recovery.txt
+
+nothing added to commit but untracked files present (use "git add" to track)
+* main
+origin	git@github.com:aorevo/server-handover-report.git (fetch)
+origin	git@github.com:aorevo/server-handover-report.git (push)
+7e036ae ds
+8516714 ds
+ceccdb4 ds
+661ea73 dss
+387cefd done
+4754138 Initial commit
+.
+├── app
+│   ├── main.py
+│   └── templates
+│       └── index.html
+├── configs
+│   ├── deploy-sudoers
+│   └── jail.local
+├── cron
+│   ├── disk-watch
+│   └── ops-jobs
+├── deploy-report-example.md
+├── .git
+│   ├── branches
+│   ├── COMMIT_EDITMSG
+│   ├── config
+│   ├── description
+│   ├── HEAD
+│   ├── hooks
+│   │   ├── applypatch-msg.sample
+│   │   ├── commit-msg.sample
+│   │   ├── fsmonitor-watchman.sample
+│   │   ├── post-update.sample
+│   │   ├── pre-applypatch.sample
+│   │   ├── pre-commit.sample
+│   │   ├── pre-merge-commit.sample
+│   │   ├── prepare-commit-msg.sample
+│   │   ├── pre-push.sample
+│   │   ├── pre-rebase.sample
+│   │   ├── pre-receive.sample
+│   │   ├── push-to-checkout.sample
+│   │   ├── sendemail-validate.sample
+│   │   └── update.sample
+│   ├── index
+│   ├── info
+│   │   └── exclude
+│   ├── logs
+│   │   ├── HEAD
+│   │   └── refs
+│   ├── objects
+│   │   ├── 01
+│   │   ├── 04
+│   │   ├── 09
+│   │   ├── 10
+│   │   ├── 13
+│   │   ├── 1a
+│   │   ├── 22
+│   │   ├── 26
+│   │   ├── 28
+│   │   ├── 32
+│   │   ├── 38
+│   │   ├── 3b
+│   │   ├── 3c
+│   │   ├── 5b
+│   │   ├── 5e
+│   │   ├── 66
+│   │   ├── 70
+│   │   ├── 75
+│   │   ├── 7e
+│   │   ├── 7f
+│   │   ├── 85
+│   │   ├── 8c
+│   │   ├── 94
+│   │   ├── 95
+│   │   ├── 9c
+│   │   ├── aa
+│   │   ├── ae
+│   │   ├── af
+│   │   ├── bb
+│   │   ├── bd
+│   │   ├── c7
+│   │   ├── ce
+│   │   ├── d7
+│   │   ├── db
+│   │   ├── e4
+│   │   ├── e6
+│   │   ├── f0
+│   │   ├── f6
+│   │   ├── fe
+│   │   ├── info
+│   │   └── pack
+│   ├── packed-refs
+│   └── refs
+│       ├── heads
+│       ├── remotes
+│       └── tags
+├── handover-example.md
+├── network-passport-example.md
+├── README.md
+├── repository_recovery.txt
+├── scripts
+│   ├── archive-logs.sh
+│   ├── backup-config.sh
+│   ├── disk_watch.sh
+│   ├── generate-handover.sh
+│   └── generate-network-passport.sh
+├── server_setup.md
+└── systemd
+    └── dostavka.service
+
+59 directories, 40 files

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 60px auto; padding: 0 20px; }
+    code { background: #f3f3f3; padding: 2px 6px; border-radius: 6px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 24px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>{{ app_name }}</h1>
+    <p>Простой Python-сервис, вокруг которого строится DevOps-инфраструктура.</p>
+    <p>Version: <code>{{ app_version }}</code></p>
+    <p>Instance: <code>{{ hostname }}</code></p>
+    <p>Endpoints: <code>/api/health</code>, <code>/api/info</code>, <code>/metrics</code></p>
+  </div>
+</body>
+</html>
