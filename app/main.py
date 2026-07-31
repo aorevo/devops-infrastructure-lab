@@ -63,6 +63,6 @@ def create_app() -> Flask:
 app = create_app()
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8000"))
+    port = int(os.getenv("PORT", "3000"))
     logger.info("Starting application on 0.0.0.0:%s", port)
     app.run(host="0.0.0.0", port=port)
