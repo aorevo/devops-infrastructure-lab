@@ -2,7 +2,9 @@
 
 set -uo pipefail
 
-found=0;
+found=0
+found_healthy=0
+found_unhealthy=0
 
 while read -r state recv_q send_q local_address peer_address process_info; do
 
@@ -18,15 +20,17 @@ while read -r state recv_q send_q local_address peer_address process_info; do
 
     [[ "$link_to_backend" != *"app/main.py"* ]] && continue
 
-    found=1
+    ((found += 1))
 
     echo -e "Найдено приложение\nPID: $pid_backend\nPORT: $port_backend\nCOMMAND: $link_to_backend\n"
 
     if status_code=$(curl -s --connect-timeout 2 -o /dev/null -w "%{http_code}" http://127.0.0.1:$port_backend/api/health); then
         if [[ $status_code -eq 200 ]]; then
             echo -e "Приложение запущено успешно\nHTTP: $status_code\nHEALTHY"
+            ((found_healthy += 1))
         else
             echo -e "Внимание\nHTTP: $status_code\nUNHEALTHY"
+            ((found_unhealthy += 1))
         fi
     else
         echo "Не удалось подключиться"
@@ -36,4 +40,13 @@ done < <(ss -H -tlpn)
 
 if [[ "$found" -eq 0 ]]; then
     echo "Экземпляры приложения не найдены"
+    exit 1
+fi
+
+if [[ "$found_unhealthy" -ne 0 ]]; then
+    echo -e "Найдено $found_unhealthy UNHEALTHY экземпляров\n"
+    exit 1
+else
+    echo -e "\n======\nВсё найденные экземлпяры HEALTHY\nКоличество: $found_healthy"
+    exit 0
 fi
