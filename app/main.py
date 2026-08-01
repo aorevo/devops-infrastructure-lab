@@ -22,6 +22,7 @@ def create_app() -> Flask:
 
     app_name = os.getenv("APP_NAME", "DevOps Pet Service")
     app_version = os.getenv("APP_VERSION", "0.1.0")
+    instance_id = os.getenv("INSTANCE_ID", "default")
 
     @app.get("/")
     def index():
@@ -45,6 +46,7 @@ def create_app() -> Flask:
             app=app_name,
             version=app_version,
             hostname=socket.gethostname(),
+            instance=instance_id,
         )
 
     @app.get("/metrics")
