@@ -16,6 +16,4 @@ python3 -m venv "$VENV_DIR"
 "$VENV_DIR/bin/python" -m pip install --upgrade pip
 "$VENV_DIR/bin/python" -m pip install -r "$REQUIREMENTS"
 
-echo "Dependencies installed."
-echo "Activate environment:"
-echo "source .venv/bin/activate"
+echo -e "\n=====\nЗависимости установлены\nАктивируйте окружение:\nsource .venv/bin/activate"
