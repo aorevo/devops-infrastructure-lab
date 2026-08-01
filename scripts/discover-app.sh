@@ -34,6 +34,7 @@ while read -r state recv_q send_q local_address peer_address process_info; do
         fi
     else
         echo "Не удалось подключиться"
+        ((found_unhealthy += 1))
     fi
 
 done < <(ss -H -tlpn) 
@@ -47,6 +48,6 @@ if [[ "$found_unhealthy" -ne 0 ]]; then
     echo -e "Найдено $found_unhealthy UNHEALTHY экземпляров\n"
     exit 1
 else
-    echo -e "\n======\nВсё найденные экземлпяры HEALTHY\nКоличество: $found_healthy"
+    echo -e "\n======\nВсе найденные экземпляры HEALTHY\nКоличество: $found_healthy"
     exit 0
 fi
