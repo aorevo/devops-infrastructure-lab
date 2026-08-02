@@ -7,7 +7,7 @@ VENV_DIR="$ROOT_DIR/.venv"
 REQUIREMENTS="$ROOT_DIR/app/requirements.txt"
 
 if [[ ! -f "$REQUIREMENTS" ]]; then
-    echo "requirements.txt not found: $REQUIREMENTS"
+    echo "requirements.txt не найден: $REQUIREMENTS"
     exit 1
 fi
 
