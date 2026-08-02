@@ -31,7 +31,7 @@ while read -r state recv_q send_q local_address peer_address process_info; do
             ((found_unhealthy += 1))
         fi
     else
-        echo "Не удалось подключиться\n=====\n"
+        echo -e "Не удалось подключиться\n=====\n"
         ((found_unhealthy += 1))
     fi
 
