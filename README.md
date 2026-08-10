@@ -1,4 +1,3 @@
-````markdown
 # DevOps Infrastructure Lab
 
 Учебный DevOps-проект, в котором небольшое Flask-приложение постепенно превращается в полноценный инфраструктурный стенд.
@@ -29,7 +28,7 @@ Client ──► devops-pet.local:8080 ──► Nginx
                               │ backend-2 container  │
                               │ Flask :3000          │
                               └──────────────────────┘
-````
+```
 
 Если один экземпляр приложения становится недоступен, Nginx продолжает направлять запросы на работающий backend.
 
@@ -71,8 +70,8 @@ Client ──► devops-pet.local:8080 ──► Nginx
 ```json
 {
   "app": "DevOps Pet Service",
-  "hostname": "example-host",
-  "instance": "backend-1",
+  "hostname": "a1b2c3d4e5f6",
+  "instance": "default",
   "version": "0.1.0"
 }
 ```
