@@ -1,71 +1,55 @@
 # DevOps Infrastructure Lab
 
-Учебный DevOps-проект, в котором небольшое Flask-приложение постепенно превращается в полноценный инфраструктурный стенд.
+Учебный проект для практики Linux, Nginx, Docker, Ansible и CI/CD.
 
-Проект используется для практики управления приложением, автоматизации локальных операций, настройки reverse proxy, балансировки нагрузки, контейнеризации и дальнейшего перехода к Docker Compose, CI/CD и оркестрации.
+Небольшое Flask-приложение запускается в двух Docker-контейнерах. Nginx принимает входящие запросы и распределяет их между экземплярами приложения. Настройка Nginx автоматизирована через Ansible, а сборка и проверка приложения выполняются в GitHub Actions.
 
-## О проекте
-
-Flask-приложение упаковано в Docker-образ и запускается в нескольких контейнерах. Контейнеры используют один и тот же образ, но публикуют порт приложения на разные порты хоста.
-
-Перед backend-контейнерами расположен Nginx, который выступает единой точкой входа и распределяет запросы между экземплярами приложения по алгоритму round-robin.
-
-Текущая схема:
+## Архитектура
 
 ```text
-                              ┌──────────────────────┐
-                              │ backend-1 container  │
-                              │ Flask :3000          │
-                              └──────────▲───────────┘
-                                         │
-                                  host :3000
-                                         │
-Client ──► devops-pet.local:8080 ──► Nginx
-                                         │
-                                  host :3001
-                                         │
-                              ┌──────────▼───────────┐
-                              │ backend-2 container  │
-                              │ Flask :3000          │
-                              └──────────────────────┘
+                         ┌─────────────────────┐
+                         │ backend-1           │
+                         │ Flask :3000         │
+                         └─────────▲───────────┘
+                                   │
+                              host :3000
+                                   │
+Client ──► Nginx :8080 ────────────┤
+                                   │
+                              host :3001
+                                   │
+                         ┌─────────▼───────────┐
+                         │ backend-2           │
+                         │ Flask :3000         │
+                         └─────────────────────┘
 ```
 
-Если один экземпляр приложения становится недоступен, Nginx продолжает направлять запросы на работающий backend.
+Nginx работает на хосте и использует Docker-порты `3000` и `3001`.
 
 ## Реализовано
 
-* Flask-приложение с HTML-страницей и API;
-* конфигурация через переменные окружения;
-* запуск нескольких экземпляров приложения;
-* Bash-скрипты для запуска, обнаружения и остановки backend-процессов;
-* отдельные логи и PID-файлы для экземпляров, запущенных напрямую на хосте;
-* проверка состояния через health check;
-* Nginx reverse proxy;
-* локальное доменное имя `devops-pet.local`;
-* round-robin балансировка нагрузки;
+* Flask-приложение с API;
+* два экземпляра приложения из одного Docker-образа;
+* Nginx reverse proxy и round-robin балансировка;
 * обработка отказа одного backend;
-* endpoint с метриками Prometheus;
-* контейнеризация Flask-приложения;
-* multi-stage Docker build;
-* облегчённый runtime-образ на базе `python:3.12-slim`;
-* запуск приложения внутри контейнера от непривилегированного пользователя;
-* Docker HEALTHCHECK для `/api/health`;
-* запуск нескольких контейнеров из одного Docker-образа;
-* подключение Docker-контейнеров к существующему Nginx через опубликованные порты;
-* `.dockerignore` для исключения локального окружения, `.env` и логов из build context.
+* Docker multi-stage build;
+* запуск контейнера от непривилегированного пользователя;
+* Docker healthcheck;
+* метрики в формате Prometheus;
+* автоматическая настройка Nginx через Ansible;
+* CI для сборки и проверки Docker-контейнера;
+* публикация релизных Docker-образов в GitHub Container Registry.
 
 ## API
 
-Приложение предоставляет несколько маршрутов:
-
 | Маршрут       | Назначение                           |
 | ------------- | ------------------------------------ |
-| `/`           | Главная HTML-страница                |
+| `/`           | HTML-страница                        |
 | `/api/health` | Проверка состояния приложения        |
-| `/api/info`   | Информация о приложении и экземпляре |
-| `/metrics`    | Метрики в формате Prometheus         |
+| `/api/info`   | Информация о приложении и контейнере |
+| `/metrics`    | Метрики Prometheus                   |
 
-Пример ответа `/api/info`:
+Пример:
 
 ```json
 {
@@ -76,253 +60,147 @@ Client ──► devops-pet.local:8080 ──► Nginx
 }
 ```
 
-При запуске нескольких контейнеров поле `hostname` позволяет увидеть, какой контейнер обработал запрос, и проверить работу балансировщика.
+Поле `hostname` позволяет определить контейнер, который обработал запрос.
 
-## Структура проекта
+## Структура
 
 ```text
 devops-infrastructure-lab/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml
+│       └── cd.yml
+├── ansible/
+│   ├── inventory.ini
+│   └── setup-nginx.yml
 ├── app/
 │   ├── main.py
 │   ├── requirements.txt
 │   └── templates/
-│       └── index.html
 ├── infra/
 │   └── nginx/
 │       ├── devops-pet.conf
 │       └── check-curl.sh
 ├── scripts/
-│   ├── setup-app.sh
-│   ├── start-instances.sh
-│   ├── discover-app.sh
-│   └── stop-instances.sh
 ├── Dockerfile
 ├── .dockerignore
-├── .gitignore
 └── README.md
 ```
 
-## Управление приложением без Docker
-
-До контейнеризации приложение запускалось как несколько отдельных процессов на хосте.
-
-### Подготовка окружения
-
-```bash
-./scripts/setup-app.sh
-```
-
-Скрипт создаёт виртуальное окружение и устанавливает зависимости приложения.
-
-### Запуск backend
-
-```bash
-./scripts/start-instances.sh \
-  3000 backend-1 \
-  3001 backend-2
-```
-
-Аргументы передаются парами:
-
-```text
-<порт> <имя экземпляра>
-```
-
-Для каждого экземпляра создаются:
-
-```text
-logs/<instance>.log
-logs/<instance>.pid
-```
-
-### Проверка состояния
-
-```bash
-./scripts/discover-app.sh
-```
-
-Скрипт анализирует слушающие TCP-сокеты, находит процессы приложения и проверяет endpoint `/api/health`.
-
-В результате выводятся:
-
-* PID процесса;
-* порт;
-* команда запуска;
-* HTTP-код;
-* состояние экземпляра.
-
-### Остановка backend
-
-```bash
-./scripts/stop-instances.sh backend-1 backend-2
-```
-
-Перед остановкой скрипт проверяет, что PID действительно принадлежит процессу `app/main.py`.
-
 ## Docker
 
-Приложение собирается в Docker-образ `server-handover:1.0`.
-
-Dockerfile использует multi-stage build: зависимости устанавливаются в отдельном builder-stage, после чего в финальный образ переносятся установленные Python-пакеты и код приложения.
-
-В runtime используется `python:3.12-slim`.
-
-Внутри контейнера создаётся непривилегированный пользователь `appuser`, от имени которого запускается Flask-приложение.
-
-Для проверки состояния контейнера используется Docker HEALTHCHECK, обращающийся к:
-
-```text
-http://localhost:3000/api/health
-```
-
-### Сборка образа
+Сборка образа:
 
 ```bash
-docker build -t server-handover:1.0 .
+docker build -t devops-pet:local .
 ```
 
-### Запуск двух backend-контейнеров
+Запуск двух экземпляров:
 
 ```bash
-docker run -d --name backend-1 -p 3000:3000 server-handover:1.0
-docker run -d --name backend-2 -p 3001:3000 server-handover:1.0
+docker run -d --name backend-1 -p 3000:3000 devops-pet:local
+docker run -d --name backend-2 -p 3001:3000 devops-pet:local
 ```
 
-Оба контейнера создаются из одного образа:
-
-```text
-server-handover:1.0
-        │
-        ├── backend-1 → host:3000 → container:3000
-        └── backend-2 → host:3001 → container:3000
-```
-
-### Проверка состояния контейнера
-
-```bash
-docker inspect --format='{{.State.Health.Status}}' backend-1
-```
-
-`--format — format — вывести только выбранное поле`.
-
-Ожидаемый результат:
-
-```text
-healthy
-```
-
-Проверить пользователя внутри контейнера:
-
-```bash
-docker exec backend-1 whoami
-```
-
-Ожидаемый результат:
-
-```text
-appuser
-```
-
-## Nginx
-
-Конфигурация Nginx находится в:
-
-```text
-infra/nginx/devops-pet.conf
-```
-
-Nginx работает на хостовой системе и принимает запросы на:
-
-```text
-http://devops-pet.local:8080
-```
-
-В конфигурации определена группа upstream:
-
-```nginx
-upstream devops_backend {
-    server 127.0.0.1:3000;
-    server 127.0.0.1:3001;
-}
-```
-
-Порты `3000` и `3001` на хосте опубликованы Docker-контейнерами и ведут на порт `3000` соответствующего Flask-приложения внутри контейнера.
-
-Таким образом, полный путь запроса выглядит так:
-
-```text
-Client
-  ↓
-Nginx :8080
-  ↓
-upstream
-  ├── 127.0.0.1:3000 → backend-1 container → Flask :3000
-  └── 127.0.0.1:3001 → backend-2 container → Flask :3000
-```
-
-Для локального разрешения имени используется запись:
-
-```text
-127.0.0.1 devops-pet.local
-```
-
-Проверить работу балансировки можно скриптом:
-
-```bash
-./infra/nginx/check-curl.sh
-```
-
-Также запрос можно выполнить напрямую через Nginx:
+Проверка через Nginx:
 
 ```bash
 curl -H "Host: devops-pet.local" http://localhost:8080/api/info
 ```
 
-`-H — header — передать HTTP-заголовок`.
-
-Последовательные ответы позволяют увидеть, что запросы обрабатываются разными контейнерами.
-
-## Отказоустойчивость
-
-При работе двух контейнеров Nginx распределяет запросы между ними.
-
-Если один backend становится недоступен, второй продолжает обслуживать запросы:
+Для локального имени используется запись:
 
 ```text
-backend-1 недоступен
-        ↓
-Nginx
-        ↓
-backend-2 продолжает обслуживать запросы
+127.0.0.1 devops-pet.local
 ```
 
-Если недоступны оба backend, Nginx возвращает:
+## Ansible
+
+Playbook настраивает Nginx:
+
+* проверяет наличие пакета;
+* копирует конфигурацию;
+* включает конфигурацию сайта;
+* выполняет `nginx -t`;
+* проверяет состояние сервиса;
+* перезагружает конфигурацию только при изменениях.
+
+На текущем этапе inventory использует локальную машину:
+
+```ini
+[web]
+localhost ansible_connection=local
+```
+
+Запуск:
+
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/setup-nginx.yml -K
+```
+
+## CI
+
+Workflow `.github/workflows/ci.yml` запускается при push и pull request.
+
+Он:
+
+1. получает код;
+2. настраивает Python;
+3. устанавливает зависимости;
+4. собирает Docker-образ;
+5. запускает контейнер;
+6. проверяет `/api/health`.
+
+Ошибка на любом этапе завершает CI с ошибкой.
+
+## CD
+
+Workflow `.github/workflows/cd.yml` запускается для Git-тегов вида:
 
 ```text
-502 Bad Gateway
+v1.0
+v1.1
+v2.0
+```
+
+Перед публикацией релиза выполняется отдельная проверка Docker-контейнера.
+
+```text
+tag v*
+   │
+   ▼
+test
+   │
+   │ success
+   ▼
+publish
+   │
+   ▼
+GitHub Container Registry
+```
+
+Если проверка завершается ошибкой, публикация не выполняется.
+
+Создание релиза:
+
+```bash
+git tag v1.0
+git push origin v1.0
+```
+
+Релизный образ публикуется как:
+
+```text
+ghcr.io/aorevo/devops-infrastructure-lab:<tag>
 ```
 
 ## Технологии
 
-* Python;
-* Flask;
-* Bash;
-* Linux;
-* Nginx;
-* Docker;
-* Git;
-* Prometheus client.
+Python, Flask, Linux, Nginx, Docker, Ansible, GitHub Actions, Git.
 
 ## Дальнейшее развитие
 
-Следующие этапы проекта:
-
-```text
-Docker Compose
-CI/CD
-Ansible
-Kubernetes
-Terraform
-Prometheus
-Grafana
-```
+* Docker Compose;
+* Kubernetes;
+* Terraform;
+* Prometheus и Grafana.
