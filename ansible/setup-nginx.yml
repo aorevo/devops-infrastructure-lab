@@ -17,6 +17,13 @@
         mode: "0644"
       notify: Перезагрузить конфигурацию nginx
 
+    - name: Включить конфигурацию сайта
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/devops-pet.conf
+        dest: /etc/nginx/sites-enabled/devops-pet.conf
+        state: link
+      notify: Перезагрузить конфигурацию nginx
+
     - name: Проверить конфигурацию nginx
       ansible.builtin.command: nginx -t
       changed_when: false
@@ -26,12 +33,6 @@
         name: nginx
         state: started
         enabled: true
-
-    - name: Включить конфигурацию сайта
-      ansible.builtin.file:
-        src: /etc/nginx/sites-available/devops-pet.conf
-        dest: /etc/nginx/sites-enabled/devops-pet.conf
-        state: link
 
   handlers:
     - name: Перезагрузить конфигурацию nginx
