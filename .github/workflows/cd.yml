@@ -6,7 +6,26 @@ on:
       - "v*"
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Получить код
+        uses: actions/checkout@v6
+
+      - name: Собрать Docker image для проверки
+        run: docker build -t devops-pet:release-test .
+
+      - name: Запустить контейнер
+        run: docker run -d --name release-test -p 4000:3000 devops-pet:release-test
+
+      - name: Проверить health endpoint
+        run: |
+          sleep 3
+          curl --fail http://localhost:4000/api/health
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
 
     permissions:
@@ -16,15 +35,15 @@ jobs:
     steps:
       - name: Получить код
         uses: actions/checkout@v6
-      
+
       - name: Войти в GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Собрать Docker образ
+
+      - name: Собрать Docker image
         run: docker build -t ghcr.io/${{ github.repository }}:${{ github.ref_name }} .
 
       - name: Опубликовать Docker image
