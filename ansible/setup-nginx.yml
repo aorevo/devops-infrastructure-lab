@@ -1,0 +1,40 @@
+- name: Настройка nginx
+  hosts: web
+  become: true
+
+  tasks:
+    - name: Установить nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+
+    - name: Скопировать конфигурацию nginx
+      ansible.builtin.copy:
+        src: ../infra/nginx/devops-pet.conf
+        dest: /etc/nginx/sites-available/devops-pet.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Перезагрузить конфигурацию nginx
+
+    - name: Проверить конфигурацию nginx
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Убедиться, что nginx запущен
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Включить конфигурацию сайта
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/devops-pet.conf
+        dest: /etc/nginx/sites-enabled/devops-pet.conf
+        state: link
+
+  handlers:
+    - name: Перезагрузить конфигурацию nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
