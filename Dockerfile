@@ -18,5 +18,5 @@ EXPOSE 3000
 
 CMD ["python", "main.py"]
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:3000/api/health')"
