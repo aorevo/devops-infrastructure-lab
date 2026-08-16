@@ -1,0 +1,68 @@
+- name: Развернуть DevOps Infrastructure Lab
+  hosts: web
+  become: true
+
+  vars:
+    app_dir: /srv/devops-infrastructure-lab
+
+  tasks:
+    - name: Скопировать compose.yaml
+      ansible.builtin.copy:
+        src: ../compose.yaml
+        dest: "{{ app_dir }}/compose.yaml"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Скопировать Dockerfile
+      ansible.builtin.copy:
+        src: ../Dockerfile
+        dest: "{{ app_dir }}/Dockerfile"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Скопировать .dockerignore
+      ansible.builtin.copy:
+        src: ../.dockerignore
+        dest: "{{ app_dir }}/.dockerignore"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Скопировать приложение
+      ansible.builtin.copy:
+        src: ../app/
+        dest: "{{ app_dir }}/app/"
+        owner: root
+        group: root
+
+    - name: Создать каталог для Nginx
+      ansible.builtin.file:
+        path: "{{ app_dir }}/infra/nginx"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Скопировать конфигурацию Nginx
+      ansible.builtin.copy:
+        src: ../infra/nginx/default.conf
+        dest: "{{ app_dir }}/infra/nginx/default.conf"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Скопировать .env
+      ansible.builtin.copy:
+        src: ../.env
+        dest: "{{ app_dir }}/.env"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Запустить Docker Compose
+      ansible.builtin.command:
+        cmd: docker compose up -d --build
+        chdir: "{{ app_dir }}"

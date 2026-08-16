@@ -1,71 +1,66 @@
 # DevOps Infrastructure Lab
 
-Учебный проект для практики Linux, Nginx, Docker, Ansible и CI/CD.
+DevOps-проект для практики контейнеризации, сетевого взаимодействия сервисов, reverse proxy и CI/CD.
 
-Небольшое Flask-приложение запускается в двух Docker-контейнерах. Nginx принимает входящие запросы и распределяет их между экземплярами приложения. Настройка Nginx автоматизирована через Ansible, а сборка и проверка приложения выполняются в GitHub Actions.
+Приложение состоит из Flask backend, Nginx, PostgreSQL и Redis. Вся инфраструктура запускается через Docker Compose.
 
 ## Архитектура
 
 ```text
-                         ┌─────────────────────┐
-                         │ backend-1           │
-                         │ Flask :3000         │
-                         └─────────▲───────────┘
-                                   │
-                              host :3000
-                                   │
-Client ──► Nginx :8080 ────────────┤
-                                   │
-                              host :3001
-                                   │
-                         ┌─────────▼───────────┐
-                         │ backend-2           │
-                         │ Flask :3000         │
-                         └─────────────────────┘
+Client
+  │
+  ▼
+Nginx :80
+  │
+  ▼
+Flask backend :3000
+  │
+  ├── PostgreSQL 16
+  └── Redis 7
 ```
 
-Nginx работает на хосте и использует Docker-порты `3000` и `3001`.
+Используются две Docker-сети:
+
+* `frontend` — Nginx и backend;
+* `backend` — backend, PostgreSQL и Redis.
+
+PostgreSQL и Redis не публикуют порты наружу.
+
+## Стек
+
+* Python 3.12
+* Flask
+* Nginx
+* Docker
+* Docker Compose
+* PostgreSQL 16
+* Redis 7
+* Prometheus Client
+* GitHub Actions
+* GitHub Container Registry
+* Ansible
 
 ## Реализовано
 
-* Flask-приложение с API;
-* два экземпляра приложения из одного Docker-образа;
-* Nginx reverse proxy и round-robin балансировка;
-* обработка отказа одного backend;
-* Docker multi-stage build;
-* запуск контейнера от непривилегированного пользователя;
-* Docker healthcheck;
-* метрики в формате Prometheus;
-* автоматическая настройка Nginx через Ansible;
-* CI для сборки и проверки Docker-контейнера;
-* публикация релизных Docker-образов в GitHub Container Registry.
+* Flask REST API;
+* Nginx reverse proxy;
+* Docker Compose;
+* разделение сервисов по Docker-сетям;
+* PostgreSQL с persistent volume;
+* Redis;
+* healthcheck контейнеров;
+* readiness check PostgreSQL и Redis;
+* multi-stage Docker build;
+* запуск backend от непривилегированного пользователя;
+* Prometheus-метрики;
+* конфигурация через environment variables;
+* CI для сборки и проверки Docker image;
+* CD с публикацией image в GitHub Container Registry.
 
-## API
-
-| Маршрут       | Назначение                           |
-| ------------- | ------------------------------------ |
-| `/`           | HTML-страница                        |
-| `/api/health` | Проверка состояния приложения        |
-| `/api/info`   | Информация о приложении и контейнере |
-| `/metrics`    | Метрики Prometheus                   |
-
-Пример:
-
-```json
-{
-  "app": "DevOps Pet Service",
-  "hostname": "a1b2c3d4e5f6",
-  "instance": "default",
-  "version": "0.1.0"
-}
-```
-
-Поле `hostname` позволяет определить контейнер, который обработал запрос.
-
-## Структура
+## Структура проекта
 
 ```text
-devops-infrastructure-lab/
+.
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml
@@ -79,128 +74,159 @@ devops-infrastructure-lab/
 │   └── templates/
 ├── infra/
 │   └── nginx/
-│       ├── devops-pet.conf
+│       ├── default.conf
 │       └── check-curl.sh
 ├── scripts/
+├── compose.yaml
 ├── Dockerfile
-├── .dockerignore
+├── .env.example
 └── README.md
 ```
 
+## API
+
+### Healthcheck
+
+Проверяет доступность Flask-приложения.
+
+```bash
+curl http://localhost/api/health
+```
+
+Ответ:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### Readiness
+
+Проверяет доступность зависимостей backend:
+
+```bash
+curl http://localhost/api/ready
+```
+
+При нормальной работе:
+
+```json
+{
+  "postgres": "ok",
+  "redis": "ok",
+  "status": "ready"
+}
+```
+
+Если PostgreSQL или Redis недоступны, endpoint возвращает `503`.
+
+### Информация о приложении
+
+```bash
+curl http://localhost/api/info
+```
+
+Пример ответа:
+
+```json
+{
+  "app": "DevOps Pet Service",
+  "hostname": "container-id",
+  "instance": "default",
+  "version": "0.1.0"
+}
+```
+
+### Метрики
+
+```bash
+curl http://localhost/metrics
+```
+
+Метрики экспортируются в формате Prometheus.
+
 ## Docker
 
-Сборка образа:
+Backend собирается через multi-stage Docker build.
 
-```bash
-docker build -t devops-pet:local .
-```
+Runtime-контейнер:
 
-Запуск двух экземпляров:
+* основан на `python:3.12-slim`;
+* запускается от пользователя `appuser`;
+* слушает порт `3000`;
+* имеет healthcheck на `/api/health`.
 
-```bash
-docker run -d --name backend-1 -p 3000:3000 devops-pet:local
-docker run -d --name backend-2 -p 3001:3000 devops-pet:local
-```
+Nginx проксирует запросы в backend по имени Compose-сервиса:
 
-Проверка через Nginx:
-
-```bash
-curl -H "Host: devops-pet.local" http://localhost:8080/api/info
-```
-
-Для локального имени используется запись:
-
-```text
-127.0.0.1 devops-pet.local
-```
-
-## Ansible
-
-Playbook настраивает Nginx:
-
-* проверяет наличие пакета;
-* копирует конфигурацию;
-* включает конфигурацию сайта;
-* выполняет `nginx -t`;
-* проверяет состояние сервиса;
-* перезагружает конфигурацию только при изменениях.
-
-На текущем этапе inventory использует локальную машину:
-
-```ini
-[web]
-localhost ansible_connection=local
-```
-
-Запуск:
-
-```bash
-ansible-playbook -i ansible/inventory.ini ansible/setup-nginx.yml -K
+```nginx
+proxy_pass http://backend:3000;
 ```
 
 ## CI
 
-Workflow `.github/workflows/ci.yml` запускается при push и pull request.
+Workflow:
 
-Он:
+```text
+.github/workflows/ci.yml
+```
 
-1. получает код;
-2. настраивает Python;
-3. устанавливает зависимости;
-4. собирает Docker-образ;
-5. запускает контейнер;
-6. проверяет `/api/health`.
+Запускается при `push` и `pull_request`.
 
-Ошибка на любом этапе завершает CI с ошибкой.
+Этапы:
+
+```text
+checkout
+   ↓
+install dependencies
+   ↓
+docker build
+   ↓
+run container
+   ↓
+healthcheck
+```
+
+При ошибке сборки или healthcheck workflow завершается неуспешно.
 
 ## CD
 
-Workflow `.github/workflows/cd.yml` запускается для Git-тегов вида:
+Workflow:
 
 ```text
-v1.0
-v1.1
-v2.0
+.github/workflows/cd.yml
 ```
 
-Перед публикацией релиза выполняется отдельная проверка Docker-контейнера.
+Запускается для Git-тегов:
 
 ```text
-tag v*
-   │
-   ▼
-test
-   │
-   │ success
-   ▼
-publish
-   │
-   ▼
-GitHub Container Registry
+v*
 ```
 
-Если проверка завершается ошибкой, публикация не выполняется.
-
-Создание релиза:
+Пример:
 
 ```bash
 git tag v1.0
 git push origin v1.0
 ```
 
-Релизный образ публикуется как:
+После успешной проверки Docker image публикуется в GitHub Container Registry:
 
 ```text
 ghcr.io/aorevo/devops-infrastructure-lab:<tag>
 ```
 
-## Технологии
+## Ansible
 
-Python, Flask, Linux, Nginx, Docker, Ansible, GitHub Actions, Git.
+Каталог `ansible/` содержит конфигурацию, созданную на предыдущем этапе проекта для практики автоматизации настройки Nginx на Linux-хосте.
+
+Основной текущий способ запуска проекта — Docker Compose.
 
 ## Дальнейшее развитие
 
-* Docker Compose;
+* интеграционная проверка полного Compose stack в CI;
+* автоматизация backup/restore PostgreSQL;
+* Prometheus и Grafana;
 * Kubernetes;
 * Terraform;
-* Prometheus и Grafana.
+* централизованный сбор логов.

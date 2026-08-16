@@ -1,0 +1,24 @@
+- name: Подготовка сервера для DevOps Infrastructure Lab
+  hosts: web
+  become: true
+
+  tasks:
+    - name: Установить Docker
+      ansible.builtin.apt:
+        name: docker.io
+        state: present
+        update_cache: true
+
+    - name: Убедиться, что Docker запущен
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Создать каталог приложения
+      ansible.builtin.file:
+        path: /srv/devops-infrastructure-lab
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
