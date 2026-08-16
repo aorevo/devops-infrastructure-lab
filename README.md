@@ -1,8 +1,8 @@
 # DevOps Infrastructure Lab
 
-DevOps-проект для практики контейнеризации, сетевого взаимодействия сервисов, reverse proxy и CI/CD.
+Учебный DevOps-проект вокруг небольшого Flask-сервиса.
 
-Приложение состоит из Flask backend, Nginx, PostgreSQL и Redis. Вся инфраструктура запускается через Docker Compose.
+Проект постепенно развивается от ручного запуска приложения к контейнерной инфраструктуре с Nginx, PostgreSQL, Redis, Docker Compose, Ansible и CI/CD.
 
 ## Архитектура
 
@@ -19,43 +19,119 @@ Flask backend :3000
   └── Redis 7
 ```
 
+`Nginx` смотрит наружу и принимает HTTP-запросы на порту `80`.
+
+`backend` — Flask-приложение с API, проверками состояния и Prometheus-метриками.
+
+`PostgreSQL` хранит данные приложения, `Redis` используется как внутренняя зависимость backend.
+
+`migrator` — служебный контейнер для создания и восстановления резервных копий PostgreSQL.
+
+## Инфраструктура
+
+Весь основной стек описан в `compose.yaml`.
+
 Используются две Docker-сети:
 
-* `frontend` — Nginx и backend;
-* `backend` — backend, PostgreSQL и Redis.
+* `frontend` — `web` и `backend`;
+* `backend` — `backend`, `db`, `redis` и `migrator`.
 
-PostgreSQL и Redis не публикуют порты наружу.
+В сеть смотрит только Nginx. Порты backend, PostgreSQL и Redis наружу не публикуются.
 
-## Стек
+Backend соединяет обе сети: принимает запросы от Nginx и обращается к PostgreSQL и Redis.
 
-* Python 3.12
-* Flask
-* Nginx
-* Docker
-* Docker Compose
-* PostgreSQL 16
-* Redis 7
-* Prometheus Client
-* GitHub Actions
-* GitHub Container Registry
-* Ansible
+Для PostgreSQL используется named volume `pgdata`, поэтому данные сохраняются при пересоздании контейнера.
 
-## Реализовано
+Backend собирается через multi-stage `Dockerfile` на Python 3.12. Финальный контейнер основан на `python:3.12-slim` и запускается не от `root`, а от пользователя `appuser`.
 
-* Flask REST API;
-* Nginx reverse proxy;
-* Docker Compose;
-* разделение сервисов по Docker-сетям;
-* PostgreSQL с persistent volume;
-* Redis;
-* healthcheck контейнеров;
-* readiness check PostgreSQL и Redis;
-* multi-stage Docker build;
-* запуск backend от непривилегированного пользователя;
-* Prometheus-метрики;
-* конфигурация через environment variables;
-* CI для сборки и проверки Docker image;
-* CD с публикацией image в GitHub Container Registry.
+### Проверки состояния
+
+У приложения есть две разные проверки.
+
+`/api/health` показывает, что само Flask-приложение запущено:
+
+```bash
+curl http://localhost/api/health
+```
+
+`/api/ready` дополнительно проверяет, доступны ли PostgreSQL и Redis:
+
+```bash
+curl http://localhost/api/ready
+```
+
+PostgreSQL проверяется через `SELECT 1`, Redis — через `PING`.
+
+Если одна из зависимостей недоступна, `/api/ready` возвращает HTTP `503`, при этом `/api/health` может продолжать отвечать `200`.
+
+Compose использует `service_healthy`, поэтому backend запускается только после готовности PostgreSQL и Redis, а Nginx — после готовности backend.
+
+### Конфигурация
+
+Пароль PostgreSQL передаётся через `PG_PASSWORD` из локального `.env`.
+
+Сам `.env` не хранится в Git и исключён из контекста сборки Docker. В репозитории лежит только `.env.example`.
+
+Для PostgreSQL также настроены:
+
+* проверка состояния через `pg_isready`;
+* лимит памяти `512M`;
+* ротация Docker-логов;
+* постоянное хранение данных в volume.
+
+### Метрики
+
+Backend отдаёт Prometheus-метрики:
+
+```bash
+curl http://localhost/metrics
+```
+
+Сам Prometheus в текущий стек пока не входит.
+
+### Ansible
+
+Ansible используется для подготовки Linux-хоста и развёртывания приложения.
+
+`ansible/setup-docker.yml`:
+
+* устанавливает Docker;
+* запускает и включает `docker.service`;
+* создаёт `/srv/devops-infrastructure-lab`.
+
+`ansible/deploy-app.yml` копирует необходимые файлы проекта в `/srv/devops-infrastructure-lab` и запускает:
+
+```bash
+docker compose up -d --build
+```
+
+Текущий `inventory.ini` рассчитан на локальную VM через `ansible_connection=local`.
+
+### CI/CD
+
+CI запускается при `push` и `pull_request`.
+
+```text
+checkout
+   ↓
+установка зависимостей
+   ↓
+сборка Docker image
+   ↓
+запуск backend
+   ↓
+проверка /api/health
+```
+
+CD запускается при создании Git-тега `v*`.
+
+После успешной проверки образ backend публикуется в GitHub Container Registry:
+
+```text
+ghcr.io/aorevo/devops-infrastructure-lab:<tag>
+```
+
+Сейчас CD отвечает за сборку и публикацию образа. Автоматического развёртывания из GHCR на сервер пока нет.
 
 ## Структура проекта
 
@@ -63,53 +139,75 @@ PostgreSQL и Redis не публикуют порты наружу.
 .
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml
-│       └── cd.yml
+│       ├── ci.yml              # сборка и проверка backend
+│       └── cd.yml              # публикация release-образа в GHCR
+│
 ├── ansible/
-│   ├── inventory.ini
-│   └── setup-nginx.yml
+│   ├── inventory.ini           # inventory для локальной VM
+│   ├── setup-docker.yml        # подготовка Docker-хоста
+│   └── deploy-app.yml          # развёртывание Compose stack
+│
 ├── app/
-│   ├── main.py
-│   ├── requirements.txt
+│   ├── main.py                 # Flask API и проверки зависимостей
+│   ├── requirements.txt        # Python-зависимости
 │   └── templates/
+│
 ├── infra/
 │   └── nginx/
-│       ├── default.conf
-│       └── check-curl.sh
-├── scripts/
-├── compose.yaml
-├── Dockerfile
-├── .env.example
+│       └── default.conf        # reverse proxy
+│
+├── legacy/                     # предыдущая версия инфраструктуры
+├── compose.yaml                # текущий Compose stack
+├── Dockerfile                  # образ backend
+├── .env.example                # пример переменных окружения
 └── README.md
 ```
 
-## API
+В `legacy/` сохранён предыдущий этап проекта: ручной запуск Flask-инстансов, shell-скрипты и установка Nginx непосредственно на Linux-хост.
 
-### Healthcheck
+## Запуск
 
-Проверяет доступность Flask-приложения.
+Создать локальный `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Указать свой пароль PostgreSQL в `PG_PASSWORD`.
+
+Запустить стек:
+
+```bash
+docker compose up -d --build
+```
+
+## Проверка работы
+
+Проверить состояние контейнеров:
+
+```bash
+docker compose ps
+```
+
+Проверить, что приложение работает:
 
 ```bash
 curl http://localhost/api/health
 ```
 
-Ответ:
+Ожидаемый ответ:
 
 ```json
-{
-  "status": "ok"
-}
+{"status":"ok"}
 ```
 
-### Readiness
-
-Проверяет доступность зависимостей backend:
+Проверить доступность PostgreSQL и Redis:
 
 ```bash
 curl http://localhost/api/ready
 ```
 
-При нормальной работе:
+Ожидаемый ответ:
 
 ```json
 {
@@ -119,114 +217,47 @@ curl http://localhost/api/ready
 }
 ```
 
-Если PostgreSQL или Redis недоступны, endpoint возвращает `503`.
-
-### Информация о приложении
-
-```bash
-curl http://localhost/api/info
-```
-
-Пример ответа:
-
-```json
-{
-  "app": "DevOps Pet Service",
-  "hostname": "container-id",
-  "instance": "default",
-  "version": "0.1.0"
-}
-```
-
-### Метрики
+Проверить метрики:
 
 ```bash
 curl http://localhost/metrics
 ```
 
-Метрики экспортируются в формате Prometheus.
+## Резервное копирование PostgreSQL
 
-## Docker
+Для служебных команд используется Compose profile `tools`.
 
-Backend собирается через multi-stage Docker build.
-
-Runtime-контейнер:
-
-* основан на `python:3.12-slim`;
-* запускается от пользователя `appuser`;
-* слушает порт `3000`;
-* имеет healthcheck на `/api/health`.
-
-Nginx проксирует запросы в backend по имени Compose-сервиса:
-
-```nginx
-proxy_pass http://backend:3000;
-```
-
-## CI
-
-Workflow:
-
-```text
-.github/workflows/ci.yml
-```
-
-Запускается при `push` и `pull_request`.
-
-Этапы:
-
-```text
-checkout
-   ↓
-install dependencies
-   ↓
-docker build
-   ↓
-run container
-   ↓
-healthcheck
-```
-
-При ошибке сборки или healthcheck workflow завершается неуспешно.
-
-## CD
-
-Workflow:
-
-```text
-.github/workflows/cd.yml
-```
-
-Запускается для Git-тегов:
-
-```text
-v*
-```
-
-Пример:
+Создать резервную копию базы:
 
 ```bash
-git tag v1.0
-git push origin v1.0
+mkdir -p backups
+
+docker compose run --rm migrator \
+  pg_dump -h db -U postgres -d postgres \
+  > backups/postgres-backup.sql
 ```
 
-После успешной проверки Docker image публикуется в GitHub Container Registry:
+Восстановить базу из SQL-файла:
 
-```text
-ghcr.io/aorevo/devops-infrastructure-lab:<tag>
+```bash
+docker compose run --rm -T migrator \
+  psql -h db -U postgres -d postgres \
+  < backups/postgres-backup.sql
 ```
 
-## Ansible
+## Основные решения
 
-Каталог `ansible/` содержит конфигурацию, созданную на предыдущем этапе проекта для практики автоматизации настройки Nginx на Linux-хосте.
+* **В сеть смотрит только Nginx.** На хосте открыт только порт `80`; backend, PostgreSQL и Redis доступны внутри Docker-сетей.
+* **Сервисы разведены по сетям.** Nginx видит backend, а PostgreSQL и Redis находятся во внутренней сети и напрямую Nginx недоступны.
+* **Проверки приложения и его зависимостей разделены.** Можно отличить ситуацию «сам backend не работает» от «backend работает, но недоступна база или Redis».
+* **Данные PostgreSQL не зависят от контейнера.** Они хранятся в `pgdata` и не пропадают после пересоздания `db`.
+* **Backend работает не от root.** Для образа используется multi-stage build и отдельный пользователь `appuser`.
+* **Развёртывание собрано в Ansible.** Подготовку хоста и запуск Compose stack не нужно повторять вручную по шагам.
 
-Основной текущий способ запуска проекта — Docker Compose.
+## Что дальше
 
-## Дальнейшее развитие
-
-* интеграционная проверка полного Compose stack в CI;
-* автоматизация backup/restore PostgreSQL;
-* Prometheus и Grafana;
-* Kubernetes;
-* Terraform;
-* централизованный сбор логов.
+* поднять полный Docker Compose stack в CI и проверять взаимодействие Nginx, backend, PostgreSQL и Redis;
+* привести CD к схеме, где сервер получает уже собранный Docker image из GHCR, а не собирает backend самостоятельно;
+* добавить несколько практических Bash-скриптов для обслуживания проекта: проверка состояния сервисов, просмотр логов, backup базы;
+* расширить диагностику контейнеров и Linux-хоста: использование CPU/RAM, место на диске, состояние сервисов и логов;
+* после закрепления Docker и CI/CD перейти к базовому Kubernetes-развёртыванию этого же приложения.
